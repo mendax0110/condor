@@ -436,8 +436,7 @@ class ScipyMinimizeBase(OptimizationProblem):
     Options
     --------
     exact_hessian : bool
-        accepted for consistency with other implementations; SciPy CG and SLSQP do not
-        use an exact Hessian
+        whether to use an exact Hessian when supported; ignored by CG and SLSQP
     **options
         keyword options are passed directly to scipy.minimize's options keyword argument
     """
@@ -448,11 +447,18 @@ class ScipyMinimizeBase(OptimizationProblem):
     def construct(
         self,
         model,
+        iter_callback=None,
+        init_callback=None,
         exact_hessian=True,
         **options,
     ):
         """Configure SciPy options, consuming backend-independent Hessian settings."""
-        super().construct(model, **options)
+        super().construct(
+            model,
+            iter_callback=iter_callback,
+            init_callback=init_callback,
+            **options,
+        )
         self.f_func = self.objective_func
         self.f_jac_func = expression_to_operator(
             [self.x, self.p],
