@@ -435,15 +435,23 @@ class ScipyMinimizeBase(OptimizationProblem):
 
     Options
     --------
+    exact_hessian : bool
+        accepted for consistency with other implementations; SciPy CG and SLSQP do not
+        use an exact Hessian
     **options
         keyword options are passed directly to scipy.minimize's options keyword argument
     """
 
+    supports_bounds = True
+    supports_constraints = True
+
     def construct(
         self,
         model,
+        exact_hessian=True,
         **options,
     ):
+        """Configure SciPy options, consuming backend-independent Hessian settings."""
         super().construct(model, **options)
         self.f_func = self.objective_func
         self.f_jac_func = expression_to_operator(
@@ -475,6 +483,22 @@ class ScipyMinimizeBase(OptimizationProblem):
 
         scipy_constraints = self.prepare_constraints(extra_args)
 
+        bounds = None
+        has_finite_bounds = np.any(np.isfinite(self.lbx)) or np.any(
+            np.isfinite(self.ubx)
+        )
+        has_finite_constraints = np.any(np.isfinite(self.lbg)) or np.any(
+            np.isfinite(self.ubg)
+        )
+        if has_finite_constraints and not self.supports_constraints:
+            msg = f"{self.method_string} does not support constraints"
+            raise ValueError(msg)
+        if has_finite_bounds:
+            if not self.supports_bounds:
+                msg = f"{self.method_string} does not support variable bounds"
+                raise ValueError(msg)
+            bounds = np.column_stack((self.lbx, self.ubx))
+
         if self.init_callback is not None:
             self.init_callback(
                 model_instance.parameter,
@@ -488,7 +512,7 @@ class ScipyMinimizeBase(OptimizationProblem):
             method=self.method_string,
             args=extra_args,
             constraints=scipy_constraints,
-            bounds=np.vstack([self.lbx, self.ubx]).T,
+            bounds=bounds,
             # tol = 1E-9,
             # options=dict(disp=True),
             options=self.options,
@@ -505,6 +529,8 @@ class ScipyMinimizeBase(OptimizationProblem):
 
 class ScipyCG(ScipyMinimizeBase):
     method_string = "CG"
+    supports_bounds = False
+    supports_constraints = False
 
 
 class ScipySLSQP(ScipyMinimizeBase):
